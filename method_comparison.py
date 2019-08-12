@@ -16,10 +16,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import GaussianNB
 import seaborn as sns
 import matplotlib.pyplot as plt 
-
+from sklearn.svm import LinearSVC
 from scipy.stats import ks_2samp
 from sklearn import tree
-
+from sklearn.linear_model import LogisticRegression
 
 def read_data(file_name):
     '''
@@ -58,6 +58,15 @@ def generate_fingerprints(mols):
 
     return fps 
 
+def lr(x_train, x_test, y_train, y_test):
+    '''
+    Fits the data to a LR model
+    '''
+    model = LogisticRegression().fit(x_train, y_train)
+    predictions = model.predict(x_test)
+    score = matthews_corrcoef(y_test, predictions)
+    
+    return score
 
 def knn(x_train, x_test, y_train, y_test):
     '''
@@ -93,7 +102,7 @@ def lin_svm(x_train, x_test, y_train, y_test):
     Fits the data to a SVM model
     '''
 
-    model = svm.SVC().fit(x_train, y_train)
+    model = LinearSVC().fit(x_train, y_train)
     predictions = model.predict(x_test)
     score = matthews_corrcoef(y_test, predictions)
 
@@ -112,8 +121,9 @@ def guassian_process(x_train, x_test, y_train, y_test):
     '''
     Fits data using a Gaussian Process and makes predictions 
     '''
-
-    gpc = GaussianProcessClassifier().fit(x_train, y_train)
+    kernel = 1 * RBF(1.2)
+    gpc = GaussianProcessClassifier(kernel=kernel).fit(x_train, y_train)
+    
     predictions = gpc.predict(x_test)
     score = matthews_corrcoef(y_test, predictions)
     
@@ -130,9 +140,10 @@ def main():
     mcc_rf = [] 
     mcc_nb = []
     mcc_dt = []
+    mcc_lr = []
 
     # Compare each model 100 times, and get distributions of MCC values 
-    for _ in range(150):
+    for _ in range(125):
         X_train, X_test, y_train, y_test = segment_data(osm_data)
         
         # Convert Smiles to mols
@@ -145,25 +156,27 @@ def main():
         y_train = [int(x) for x in y_train]
         y_test = [int(x) for x in y_test]
 
-        mcc_gaussian.append(guassian_process(x_train_fp, x_test_fp, y_train, y_test))
+        #mcc_gaussian.append(guassian_process(x_train_fp, x_test_fp, y_train, y_test))
         mcc_knn.append(knn(x_train_fp, x_test_fp, y_train, y_test))
         mcc_svm.append(lin_svm(x_train_fp, x_test_fp, y_train, y_test))
         mcc_rf.append(rf(x_train_fp, x_test_fp, y_train, y_test))
         mcc_nb.append(nb(x_train_fp, x_test_fp, y_train, y_test))
         mcc_dt.append(dt(x_train_fp, x_test_fp, y_train, y_test))
+        mcc_lr.append(lr(x_train_fp, x_test_fp, y_train, y_test))
 
-    all_mcc = zip(mcc_gaussian, mcc_knn, mcc_rf, mcc_nb, mcc_dt)
+    all_mcc = zip(mcc_knn, mcc_svm, mcc_rf, mcc_nb, mcc_dt, mcc_lr)
     all_mcc = pd.DataFrame(all_mcc)
-    all_mcc.columns = ['Gaussian', 'KNN', 'SVM', 'RF', 'NB', 'DecisionTree']
+    all_mcc.columns = ['KNN', 'SVM', 'RF', 'NB', 'DecisionTree', 'LogReg']
     all_mcc.to_csv('all_mcc.csv', index=False)
+    
     fig, ax = plt.subplots()
     all_mcc = all_mcc.reindex(all_mcc.mean().sort_values().index, axis=1)
     g = sns.violinplot(data=all_mcc, palette='GnBu_d')
-    g.set_xticklabels(['Gaussian', 'KNN', 'SVM', 'RF', 'NB', 'DecisionTree'])
+    g.set_xticklabels(['KNN', 'SVM', 'RF', 'NB', 'DecisionTree', 'LR'])
     plt.show()
 
-    all_models =  [mcc_gaussian, mcc_knn, mcc_svm, mcc_rf, mcc_nb, mcc_dt]
-    model_names = ['mcc_gaussian','mcc_knn', 'mcc_svm', 'mcc_rf', 'mcc_nb','mcc_dt']
+    all_models =  [mcc_knn, mcc_svm, mcc_rf, mcc_nb, mcc_dt, mcc_lr]
+    model_names = ['mcc_knn', 'mcc_svm', 'mcc_rf', 'mcc_nb','mcc_dt', 'mcc_lr']
     results = [] 
     
     for i, model in enumerate(all_models):
